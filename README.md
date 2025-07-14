@@ -1,4 +1,9 @@
 # 🧪 Earnium Testnet DeFi Automation Script
+![License](https://img.shields.io/github/license/Ridwan2809/autoswap-earnium)
+![Last Commit](https://img.shields.io/github/last-commit/Ridwan2809/autoswap-earnium)
+![Stars](https://img.shields.io/github/stars/Ridwan2809/autoswap-earnium?style=social)
+![Node Version](https://img.shields.io/badge/node-%3E=18.0-blue)
+
 
 Ini adalah skrip Node.js yang dirancang untuk mengotomatisasi interaksi dengan **Earnium DEX** di **Aptos Testnet**. Anda bisa menggunakannya untuk:
 
