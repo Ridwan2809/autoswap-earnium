@@ -18,6 +18,11 @@ Ini adalah skrip Node.js yang dirancang untuk mengotomatisasi interaksi dengan *
 ███████╗ ██║  ██║ ██║  ██║ ██║ ╚████║ ██║ ╚██████╔╝ ██║  ╚═╝ ██║
 ╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═════╝  ╚═╝      ╚═╝
 
+
+
+
+
+
 by : WansNode || Telegram : https://t.me/Wansnode
 Pilih mode:
 
