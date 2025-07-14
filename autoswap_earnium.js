@@ -33,20 +33,20 @@ const FAUCET_MANAGER_MODULE = 'token_manager';
 const FAUCET_COIN_SYMBOLS_TO_CLAIM = ['BTC', 'USDt', 'USDC'];
 const FAUCET_COIN_AMOUNTS_TO_CLAIM = [9176n, 10_000_000n, 10_000_000n];
 
-// Definisi COINS
+// Definisi COINS dengan properti desimal
 const COINS = {
-    APT: { type: '0x1::aptos_coin::AptosCoin', address: '0x000000000000000000000000000000000000000000000000000000000000000a' },
-    BTC: { type: '0xf46c908924df959df593d7d2f54a00069f6af25f7d1002bfa81c7e653951b32a::coin_manager::BTC', address: '0x4542f1d345eefab73e2bb95a7af7e3d93c5730160c48e9f793fcad24e84aa396' },
-    USDT: { type: '0x9b440b91089cceeadc1ad4765720d88efd1cdfa69fc21feb3edafe6af42131e2::coin::T', address: '0x9b440b91089cceeadc1ad4765720d88efd1cdfa69fc21feb3edafe6af42131e2' },
-    USDt: { type: '0x9b440b91089cceeadc1ad4765720d88efd1cdfa69fc21feb3edafe6af42131e2::coin::T', address: '0x9b440b91089cceeadc1ad4765720d88efd1cdfa69fc21feb3edafe6af42131e2' },
-    USDC: { type: '0xeb228470268091d369809d22a71dbd8c23c7da7b17a3a345709ae101451691f0::coin::T', address: '0xeb228470268091d369809d22a71dbd8c23c7da7b17a3a345709ae101451691f0' }
+    APT: { type: '0x1::aptos_coin::AptosCoin', address: '0x000000000000000000000000000000000000000000000000000000000000000a', decimals: 8 },
+    BTC: { type: '0xf46c908924df959df593d7d2f54a00069f6af25f7d1002bfa81c7e653951b32a::coin_manager::BTC', address: '0x4542f1d345eefab73e2bb95a7af7e3d93c5730160c48e9f793fcad24e84aa396', decimals: 8 },
+    USDT: { type: '0x9b440b91089cceeadc1ad4765720d88efd1cdfa69fc21feb3edafe6af42131e2::coin::T', address: '0x9b440b91089cceeadc1ad4765720d88efd1cdfa69fc21feb3edafe6af42131e2', decimals: 6 },
+    USDt: { type: '0x9b440b91089cceeadc1ad4765720d88efd1cdfa69fc21feb3edafe6af42131e2::coin::T', address: '0x9b440b91089cceeadc1ad4765720d88efd1cdfa69fc21feb3edafe6af42131e2', decimals: 6 },
+    USDC: { type: '0xeb228470268091d369809d22a71dbd8c23c7da7b17a3a345709ae101451691f0::coin::T', address: '0xeb228470268091d369809d22a71dbd8c23c7da7b17a3a345709ae101451691f0', decimals: 6 }
 };
 
-// Jumlah likuiditas default per pasangan
+// Jumlah likuiditas default per pasangan (hanya digunakan sebagai referensi atau fallback, tidak lagi untuk rasio dinamis 1:1)
 const LIQ_AMT_PAIR = {
     'APT/USDT': {
-        [COINS.APT.type]: 100_000n,
-        [COINS.USDT.type]: 8_084n,
+        [COINS.APT.type]: 100_000n, 
+        [COINS.USDT.type]: 8_084n, 
     },
     'USDT/USDC': {
         [COINS.USDT.type]: 10_000n,
@@ -99,6 +99,54 @@ const PAIRS = [
     ['BTC', 'USDT'],
 ];
 
+/**
+ * Mengubah jumlah desimal (string) menjadi BigInt berdasarkan jumlah desimal token.
+ * Contoh: parseUnits("0.1", 8) akan mengembalikan 10000000n
+ */
+function parseUnits(amount, decimals) {
+    if (typeof amount !== 'string') {
+        amount = String(amount);
+    }
+    const parts = amount.split('.');
+    let integerPart = BigInt(parts[0]);
+    let decimalPart = BigInt(0);
+    let decimalLength = 0;
+
+    if (parts.length > 1) {
+        decimalPart = BigInt(parts[1]);
+        decimalLength = parts[1].length;
+    }
+
+    if (decimalLength > decimals) {
+        throw new Error(`Input desimal terlalu banyak (${decimalLength}) untuk token dengan ${decimals} desimal.`);
+    }
+
+    const multiplier = BigInt(10) ** BigInt(decimals);
+    const decimalMultiplier = BigInt(10) ** BigInt(decimals - decimalLength);
+
+    return (integerPart * multiplier) + (decimalPart * decimalMultiplier);
+}
+
+/**
+ * Mengubah BigInt menjadi jumlah desimal (string) berdasarkan jumlah desimal token.
+ * Contoh: formatUnits(10000000n, 8) akan mengembalikan "0.1"
+ */
+function formatUnits(bigIntAmount, decimals) {
+    const divisor = BigInt(10) ** BigInt(decimals);
+    const integerPart = bigIntAmount / divisor;
+    let decimalPart = bigIntAmount % divisor;
+    
+    let decimalString = decimalPart.toString().padStart(decimals, '0');
+    // Hapus nol di belakang desimal jika ada
+    decimalString = decimalString.replace(/0+$/, '');
+
+    if (decimalString === '') {
+        return integerPart.toString();
+    }
+    return `${integerPart}.${decimalString}`;
+}
+
+
 async function submitTx(aptos, account, payload) {
     const tx = await aptos.transaction.build.simple({ sender: account.accountAddress, data: payload });
     const pending = await aptos.signAndSubmitTransaction({ signer: account, transaction: tx });
@@ -107,13 +155,10 @@ async function submitTx(aptos, account, payload) {
     console.log('    ✓ Berhasil dikonfirmasi!');
 }
 
-async function addLiquidity({ aptos, account, coinX, coinY }) {
-    console.log(`  Mencoba menambahkan likuiditas untuk ${coinX}/${coinY}...`);
+async function addLiquidity({ aptos, account, coinX, coinY, amountX, amountY }) {
+    console.log(`  Mencoba menambahkan likuiditas untuk ${coinX}/${coinY} dengan ${formatUnits(amountX, COINS[coinX].decimals)} ${coinX} dan ${formatUnits(amountY, COINS[coinY].decimals)} ${coinY}...`);
     
     let payload;
-    const pairKey = `${coinX}/${coinY}`;
-    const amountX = LIQ_AMT_PAIR[pairKey][COINS[coinX].type].toString();
-    const amountY = LIQ_AMT_PAIR[pairKey][COINS[coinY].type].toString();
 
     if (coinX === 'APT' || coinX === 'BTC') {
         payload = {
@@ -122,8 +167,8 @@ async function addLiquidity({ aptos, account, coinX, coinY }) {
             functionArguments: [
                 COINS[coinY].address,
                 false,
-                amountX,
-                amountY,
+                amountX.toString(),
+                amountY.toString(),
             ],
         };
     } else {
@@ -134,8 +179,8 @@ async function addLiquidity({ aptos, account, coinX, coinY }) {
                 COINS[coinX].address,
                 COINS[coinY].address,
                 false,
-                amountX,
-                amountY,
+                amountX.toString(),
+                amountY.toString(),
             ],
         };
     }
@@ -196,7 +241,7 @@ async function withdrawLiquidity({ aptos, account, coinX, coinY, round }) {
 }
 
 async function executeSwap({ aptos, account, coinX, coinY, swapAmount }) {
-    console.log(`  Mencoba menukar ${coinX} ke ${coinY} sejumlah ${swapAmount.toString()}...`);
+    console.log(`  Mencoba menukar ${formatUnits(swapAmount, COINS[coinX].decimals)} ${coinX} ke ${coinY}...`);
 
     const senderAddress = account.accountAddress.toString();
     let payload;
@@ -252,10 +297,8 @@ async function claimTestnetCoinsFaucet({ aptos, account }) {
     }
 }
 
-async function executeForAccount({ aptos, account, mode, pairIdx, rounds }) {
-    let coinX, coinY;
+async function executeForAccount({ aptos, account, mode, coinX, coinY, rounds, customSwapAmount, customLiqAmountX, customLiqAmountY }) {
     if (mode !== 'faucet_testnet_coins') {
-        [coinX, coinY] = PAIRS[pairIdx];
         console.log(`\n===============================\nAkun: ${account.accountAddress.toString()}\nPasangan: ${coinX}/${coinY} | Putaran: ${rounds} | Mode: ${mode.toUpperCase()}\n===============================`);
     } else {
         console.log(`\n===============================\nAkun: ${account.accountAddress.toString()}\nMode: ${mode.toUpperCase()}\n===============================`);
@@ -265,13 +308,13 @@ async function executeForAccount({ aptos, account, mode, pairIdx, rounds }) {
         console.log(`\n🔁 Putaran ke-${i}`);
         try {
             if (mode === 'add') {
-                await addLiquidity({ aptos, account, coinX, coinY });
+                await addLiquidity({ aptos, account, coinX, coinY, amountX: customLiqAmountX, amountY: customLiqAmountY });
             } else if (mode === 'withdraw') {
                 await withdrawLiquidity({ aptos, account, coinX, coinY, round: i });
             } else if (mode === 'swap') {
-                const swapAmount = SWAP_AMT[COINS[coinX].type];
+                const swapAmount = customSwapAmount || SWAP_AMT[COINS[coinX].type];
                 if (!swapAmount) {
-                    console.error(`⚠️  Error: SWAP_AMT tidak didefinisikan untuk ${coinX}.`);
+                    console.error(`⚠️ Error: SWAP_AMT tidak didefinisikan untuk ${coinX} dan tidak ada jumlah swap kustom yang diberikan.`);
                     continue;
                 }
                 await executeSwap({ aptos, account, coinX, coinY, swapAmount });
@@ -310,12 +353,11 @@ function loadKeys() {
     const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET, fullnode: FULLNODE_URL }));
 
 //--- ASCII Art Banner ---
-    //BANNER = """
     console.log('');
-    console.log('███████╗  █████╗  ██████╗  ███╗   ██╗ ██╗ ██╗   ██╗ ███╗   ███╗');
-    console.log('██╔════╝ ██╔══██╗ ██╔══██╗ ████╗  ██║ ██║ ██║   ██║ ████╗ ████║');
-    console.log('█████╗   ███████║ ██████╔╝ ██╔██╗ ██║ ██║ ██║   ██║ ██╔████╔██║');
-    console.log('██╔══╝   ██╔══██║ ██╔══██╗ ██║╚██╗██║ ██║ ██║   ██║ ██║╚██╔╝██║');
+    console.log('███████╗  █████╗  ██████╗  ███╗    ██╗ ██╗ ██╗    ██╗ ███╗    ███╗');
+    console.log('██╔════╝ ██╔══██╗ ██╔══██╗ ████╗  ██║ ██║ ██║    ██║ ████╗ ████║');
+    console.log('█████╗   ███████║ ██████╔╝ ██╔██╗ ██║ ██║ ██║    ██║ ██╔████╔██║');
+    console.log('██╔══╝   ██╔══██║ ██╔══██╗ ██║╚██╗██║ ██║ ██║    ██║ ██║╚██╔╝██║');
     console.log('███████╗ ██║  ██║ ██║  ██║ ██║ ╚████║ ██║ ╚██████╔╝ ██║ ╚═╝ ██║');
     console.log('╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═════╝  ╚═╝     ╚═╝');
     console.log('');
@@ -335,6 +377,12 @@ function loadKeys() {
     }
 
     let pairIdx = -1;
+    let coinX = '';
+    let coinY = '';
+    let customSwapAmount = null;
+    let customLiqAmountX = null;
+    let customLiqAmountY = null;
+
     if (mode !== 'faucet_testnet_coins') {
         console.log('\nPilih pair:');
         PAIRS.forEach((p, i) => console.log(`  ${i + 1}) ${p[0]}/${p[1]}`));
@@ -344,16 +392,47 @@ function loadKeys() {
             console.error('Pilihan pair tidak valid. Harap masukkan angka yang sesuai.');
             process.exit(1);
         }
+        [coinX, coinY] = PAIRS[pairIdx];
+    }
+
+    // Tanya jumlah swap jika mode adalah 'swap'
+    if (mode === 'swap') {
+        const amountStr = readline.question(`Masukkan jumlah ${coinX} yang ingin di-swap (contoh: 0.1): `);
+        try {
+            // Menggunakan parseUnits untuk mengkonversi input desimal ke BigInt
+            customSwapAmount = parseUnits(amountStr, COINS[coinX].decimals);
+        } catch (e) {
+            console.error(`⚠️ Input jumlah swap tidak valid: ${e.message}. Menggunakan jumlah default.`);
+            customSwapAmount = SWAP_AMT[COINS[coinX].type];
+        }
+    } 
+    // Tanya jumlah likuiditas untuk coinX dan hitung coinY secara 1:1 desimal jika mode adalah 'add'
+    else if (mode === 'add') {
+        const amountXStr = readline.question(`Masukkan jumlah ${coinX} yang ingin ditambahkan (contoh: 0.1): `);
+        try {
+            // Mengkonversi input desimal ke BigInt untuk coinX
+            customLiqAmountX = parseUnits(amountXStr, COINS[coinX].decimals);
+            
+            // Mengkonversi nilai desimal yang sama untuk coinY ke BigInt
+            // Ini akan membuat 1 (desimal) dari APT = 1 (desimal) dari USDT
+            customLiqAmountY = parseUnits(amountXStr, COINS[coinY].decimals);
+
+            console.log(`Jumlah ${coinY} yang akan ditambahkan secara otomatis (1:1 desimal): ${formatUnits(customLiqAmountY, COINS[coinY].decimals)}`);
+
+        } catch (e) {
+            console.error(`⚠️ Input jumlah likuiditas tidak valid: ${e.message}. Harap masukkan angka desimal yang benar.`);
+            process.exit(1); // Keluar jika input tidak valid untuk add liquidity
+        }
     }
 
     const rounds = parseInt(readline.question(`Berapa kali ${mode.replace('_', ' ')} per akun? (default 1): `), 10) || 1;
 
-    console.log(`\n▶️  Memulai ${mode.toUpperCase()} ${mode.startsWith('faucet') ? '' : PAIRS[pairIdx][0] + '/' + PAIRS[pairIdx][1]} sebanyak ${rounds} putaran untuk ${keys.length} akun…`);
+    console.log(`\n▶️  Memulai ${mode.toUpperCase()} ${mode.startsWith('faucet') ? '' : `${coinX}/${coinY}`} sebanyak ${rounds} putaran untuk ${keys.length} akun…`);
 
     for (const [idx, pk] of keys.entries()) {
         const account = Account.fromPrivateKey({ privateKey: new Ed25519PrivateKey(hexToBytes(pk)) });
         console.log(`\n=== [${idx + 1}/${keys.length}] ${account.accountAddress} ===`);
-        await executeForAccount({ aptos, account, mode, pairIdx, rounds });
+        await executeForAccount({ aptos, account, mode, coinX, coinY, rounds, customSwapAmount, customLiqAmountX, customLiqAmountY });
         if (idx !== keys.length - 1) await sleep(1000);
     }
 
