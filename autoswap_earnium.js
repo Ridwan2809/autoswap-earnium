@@ -1,4 +1,3 @@
-// autoswap_earnium.js - Script Otomatisasi DeFi Earnium Testnet
 require('dotenv').config();
 const fs = require('fs');
 const readline = require('readline-sync');
@@ -16,24 +15,20 @@ const ROUTER_ADDRESS = '0xd5ee59267fe627f12ab4cac246e7d683e65b5d4745660feecf63f1
 const ROUTER_MODULE = 'router';
 const LIQUIDITY_STAKE_POOL_MODULE = 'liquidity_stake_pool';
 
-// Nama fungsi untuk transaksi
 const FN_SWAP_APT_IN = 'swap_route_entry_from_coin';
 const FN_SWAP_TOKEN_IN = 'swap_route_entry';
 const FN_ADD_LIQ_COIN_ENTRY = 'add_liquidity_coin_entry';
 const FN_ADD_LIQ_ENTRY = 'add_liquidity_entry';
 
-// Fungsi Withdraw Liquidity (Dua Langkah)
 const FN_UNSTAKE = 'unstake';
 const FN_REMOVE_LIQ_ENTRY = 'remove_liquidity_entry';
 const FN_REMOVE_LIQ_COIN_ENTRY = 'remove_liquidity_coin_entry';
 
-// Konstanta Faucet
 const FAUCET_MANAGER_ADDRESS = '0xf46c908924df959df593d7d2f54a00069f6af25f7d1002bfa81c7e653951b32a';
 const FAUCET_MANAGER_MODULE = 'token_manager';
 const FAUCET_COIN_SYMBOLS_TO_CLAIM = ['BTC', 'USDt', 'USDC'];
 const FAUCET_COIN_AMOUNTS_TO_CLAIM = [9176n, 10_000_000n, 10_000_000n];
 
-// Definisi COINS dengan properti desimal
 const COINS = {
     APT: { type: '0x1::aptos_coin::AptosCoin', address: '0x000000000000000000000000000000000000000000000000000000000000000a', decimals: 8 },
     BTC: { type: '0xf46c908924df959df593d7d2f54a00069f6af25f7d1002bfa81c7e653951b32a::coin_manager::BTC', address: '0x4542f1d345eefab73e2bb95a7af7e3d93c5730160c48e9f793fcad24e84aa396', decimals: 8 },
@@ -42,7 +37,6 @@ const COINS = {
     USDC: { type: '0xeb228470268091d369809d22a71dbd8c23c7da7b17a3a345709ae101451691f0::coin::T', address: '0xeb228470268091d369809d22a71dbd8c23c7da7b17a3a345709ae101451691f0', decimals: 6 }
 };
 
-// Jumlah likuiditas default per pasangan (hanya digunakan sebagai referensi atau fallback, tidak lagi untuk rasio dinamis 1:1)
 const LIQ_AMT_PAIR = {
     'APT/USDT': {
         [COINS.APT.type]: 100_000n, 
@@ -58,7 +52,6 @@ const LIQ_AMT_PAIR = {
     }
 };
 
-// Jumlah default untuk swap
 const SWAP_AMT = {
     [COINS.APT.type]:    1_000_000n,
     [COINS.USDT.type]: 1_000n,
@@ -66,11 +59,9 @@ const SWAP_AMT = {
     [COINS.BTC.type]:    10n
 };
 
-const MIN_OUT = 1n; // Minimum jumlah output yang diharapkan
+const MIN_OUT = 1n;
 const REFERRER_ADDRESS = '0xb8cf167820fec685007b9b7afcdef2cf6a5e78cc46a551af76cd14255909b95d';
 
-// Detail LP hardcoded untuk penarikan (untuk demo)
-// Catatan: Dalam aplikasi sungguhan, nilai-nilai ini harus diambil secara dinamis.
 const LP_DETAILS_FOR_WITHDRAWAL = {
     'BTC/USDT': {
         poolId: '0x79e872588fe400f85d75484ec02d5739cf9e3ca19fe5a8e5b608c6694c574e4',
@@ -79,8 +70,8 @@ const LP_DETAILS_FOR_WITHDRAWAL = {
     },
     'APT/USDT': {
         poolId: '0x8bfa8776c0315ba1be0c0eea904af6fbf03069a7fc1573e7c68141f923df5d95',
-        unstakeLpAmount: 529394n,
-        removeLpAmount: 32425n,
+        unstakeLpAmount: 529394n, 
+        removeLpAmount: 32425n,    
     },
     'USDT/USDC': {
         poolId: '0x11a75e6020064c475cb787936adf1c756d51df1f55872bfb5f9d691ecfb52a76',
@@ -99,10 +90,6 @@ const PAIRS = [
     ['BTC', 'USDT'],
 ];
 
-/**
- * Mengubah jumlah desimal (string) menjadi BigInt berdasarkan jumlah desimal token.
- * Contoh: parseUnits("0.1", 8) akan mengembalikan 10000000n
- */
 function parseUnits(amount, decimals) {
     if (typeof amount !== 'string') {
         amount = String(amount);
@@ -127,17 +114,12 @@ function parseUnits(amount, decimals) {
     return (integerPart * multiplier) + (decimalPart * decimalMultiplier);
 }
 
-/**
- * Mengubah BigInt menjadi jumlah desimal (string) berdasarkan jumlah desimal token.
- * Contoh: formatUnits(10000000n, 8) akan mengembalikan "0.1"
- */
 function formatUnits(bigIntAmount, decimals) {
     const divisor = BigInt(10) ** BigInt(decimals);
     const integerPart = bigIntAmount / divisor;
     let decimalPart = bigIntAmount % divisor;
     
     let decimalString = decimalPart.toString().padStart(decimals, '0');
-    // Hapus nol di belakang desimal jika ada
     decimalString = decimalString.replace(/0+$/, '');
 
     if (decimalString === '') {
@@ -191,7 +173,6 @@ async function withdrawLiquidity({ aptos, account, coinX, coinY, round }) {
     console.log(`  Mencoba menarik likuiditas untuk ${coinX}/${coinY} (Putaran ke-${round})...`);
 
     const senderAddress = account.accountAddress.toString();
-    let unstakePayload;
     let removePayload;
 
     const pairKey = `${coinX}/${coinY}`;
@@ -204,22 +185,28 @@ async function withdrawLiquidity({ aptos, account, coinX, coinY, round }) {
 
     const { poolId, unstakeLpAmount, removeLpAmount } = lpDetails;
 
-    // Langkah 1: Unstake Liquidity
-    unstakePayload = {
-        function: `${ROUTER_ADDRESS}::${LIQUIDITY_STAKE_POOL_MODULE}::${FN_UNSTAKE}`,
-        typeArguments: [],
-        functionArguments: [
-            poolId,
-            unstakeLpAmount.toString(),
-        ],
-    };
+    try {
+        console.log('  -> Melakukan unstake...');
+        const unstakePayload = {
+            function: `${ROUTER_ADDRESS}::${LIQUIDITY_STAKE_POOL_MODULE}::${FN_UNSTAKE}`,
+            typeArguments: [],
+            functionArguments: [
+                poolId,
+                unstakeLpAmount.toString(),
+            ],
+        };
+        await submitTx(aptos, account, unstakePayload);
+    } catch (err) {
+        if (err.message && err.message.includes('ERR_NO_STAKE')) {
+            console.warn('  ⚠️ Peringatan: Tidak ada stake yang ditemukan untuk akun ini. Melanjutkan ke langkah melepas likuiditas.');
+        } else {
+            console.error('  ⚠️ Error saat unstake:', err.message || err);
+            throw err;
+        }
+    }
 
-    console.log('  -> Melakukan unstake...');
-    await submitTx(aptos, account, unstakePayload);
-
-    // Langkah 2: Remove Liquidity
-    const minAmountX = 0n; // Jumlah minimum koin X yang diharapkan
-    const minAmountY = 0n; // Jumlah minimum koin Y yang diharapkan
+    const minAmountX = 0n;
+    const minAmountY = 0n;
 
     removePayload = {
         function: `${ROUTER_ADDRESS}::${ROUTER_MODULE}::${FN_REMOVE_LIQ_ENTRY}`,
@@ -227,7 +214,7 @@ async function withdrawLiquidity({ aptos, account, coinX, coinY, round }) {
         functionArguments: [
             COINS[coinX].address,
             COINS[coinY].address,
-            false,
+            false, 
             removeLpAmount.toString(),
             minAmountX.toString(),
             minAmountY.toString(),
@@ -347,12 +334,10 @@ function loadKeys() {
     process.exit(1);
 }
 
-// Blok eksekusi utama
 (async () => {
     const keys = loadKeys();
     const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET, fullnode: FULLNODE_URL }));
 
-//--- ASCII Art Banner ---
     console.log('');
     console.log('███████╗  █████╗  ██████╗  ███╗    ██╗ ██╗ ██╗    ██╗ ███╗    ███╗');
     console.log('██╔════╝ ██╔══██╗ ██╔══██╗ ████╗  ██║ ██║ ██║    ██║ ████╗ ████║');
@@ -395,33 +380,26 @@ function loadKeys() {
         [coinX, coinY] = PAIRS[pairIdx];
     }
 
-    // Tanya jumlah swap jika mode adalah 'swap'
     if (mode === 'swap') {
         const amountStr = readline.question(`Masukkan jumlah ${coinX} yang ingin di-swap (contoh: 0.1): `);
         try {
-            // Menggunakan parseUnits untuk mengkonversi input desimal ke BigInt
             customSwapAmount = parseUnits(amountStr, COINS[coinX].decimals);
         } catch (e) {
             console.error(`⚠️ Input jumlah swap tidak valid: ${e.message}. Menggunakan jumlah default.`);
             customSwapAmount = SWAP_AMT[COINS[coinX].type];
         }
     } 
-    // Tanya jumlah likuiditas untuk coinX dan hitung coinY secara 1:1 desimal jika mode adalah 'add'
     else if (mode === 'add') {
         const amountXStr = readline.question(`Masukkan jumlah ${coinX} yang ingin ditambahkan (contoh: 0.1): `);
         try {
-            // Mengkonversi input desimal ke BigInt untuk coinX
             customLiqAmountX = parseUnits(amountXStr, COINS[coinX].decimals);
-            
-            // Mengkonversi nilai desimal yang sama untuk coinY ke BigInt
-            // Ini akan membuat 1 (desimal) dari APT = 1 (desimal) dari USDT
             customLiqAmountY = parseUnits(amountXStr, COINS[coinY].decimals);
 
             console.log(`Jumlah ${coinY} yang akan ditambahkan secara otomatis (1:1 desimal): ${formatUnits(customLiqAmountY, COINS[coinY].decimals)}`);
 
         } catch (e) {
             console.error(`⚠️ Input jumlah likuiditas tidak valid: ${e.message}. Harap masukkan angka desimal yang benar.`);
-            process.exit(1); // Keluar jika input tidak valid untuk add liquidity
+            process.exit(1);
         }
     }
 
