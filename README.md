@@ -65,26 +65,40 @@ FULLNODE_URL=https://fullnode.testnet.aptoslabs.com/v1
 node autoswap_earnium.js
 ```
 Skrip akan memandu Anda melalui:
+
 ▪️Mode yang dipilih (Swap, Add Liquidity, Withdraw Liquidity, Faucet)
+
 ▪️Pasangan token yang tersedia
+
 ▪️Jumlah putaran per akun
+
 ---
 ⚠️ Catatan Penting
+
 🧪 Testnet Only: Skrip ini dibuat untuk Aptos Testnet. Jangan gunakan private key dari mainnet!
+
 🔐 Amanakan Private Key: Jangan upload keys.txt atau .env ke repositori publik.
+
 📊 Slippage Rendah: MIN_OUT disetel ke 1n, artinya toleransi slippage sangat rendah. Ubah sesuai kebutuhan.
+
 📦 LP Details Hardcoded: Nilai LP pool dan jumlah token LP saat ini hardcoded. Untuk produksi, ambil data ini secara dinamis dari blockchain.
+
 🧪 Coba DApp Testnet: ``` https://testnet.earnium.io?ref=L54VGO```
 
 ---
 🤝 Kontribusi
+
 Kontribusi sangat terbuka! Jika kamu punya ide, fitur baru, atau perbaikan, silakan:
+
 Buat Pull Request
+
 Buka Issue di GitHub
+
 ---
 
 ❤️ Dibuat oleh
 WansNode
+
 📣 Telegram: https://t.me/Wansnode
 
 ---
