@@ -1,6 +1,6 @@
 # ✅ ENV dan file sensitif
 .env
-.env.*
+!.env.example   # ← Tambahkan baris ini untuk mengecualikan .env.example
 keys.txt
 
 # ✅ Dependency (npm)
