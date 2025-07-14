@@ -1,0 +1,29 @@
+# ✅ ENV dan file sensitif
+.env
+.env.*
+keys.txt
+
+# ✅ Dependency (npm)
+node_modules/
+
+# ✅ Log dan cache
+*.log
+npm-debug.log*
+.cache/
+*.tmp
+
+# ✅ Output hasil build (jika ada)
+dist/
+build/
+
+# ✅ File editor dan workspace
+.vscode/
+.idea/
+.gitpod/
+.DS_Store
+
+# ✅ File OS atau backup
+Thumbs.db
+*.swp
+*.bak
+*.old
