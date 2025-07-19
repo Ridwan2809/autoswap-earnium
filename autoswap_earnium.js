@@ -10,7 +10,7 @@ const {
     AccountAddress,
 } = require('@aptos-labs/ts-sdk');
 
-const FULLNODE_URL = process.env.FULLNODE_URL || 'https://fullnode.testnet.aptoslabs.com/v1';
+const FULLNODE_URL = process.env.FULLNODE_URL || 'https://rpc.ankr.com/premium-http/aptos_testnet/821d636b0da4a1d1480be42486a1286038c17d09e9cbe581b11d885b83a5154c/v1';
 const ROUTER_ADDRESS = '0xd5ee59267fe627f12ab4cac246e7d683e65b5d4745660feecf63f1bb0a842a65';
 const ROUTER_MODULE = 'router';
 const LIQUIDITY_STAKE_POOL_MODULE = 'liquidity_stake_pool';
@@ -59,7 +59,7 @@ const SWAP_AMT = {
     [COINS.BTC.type]:    10n
 };
 
-const MIN_OUT = 1n; 
+const MIN_OUT = 0n; 
 const REFERRER_ADDRESS = '0xb8cf167820fec685007b9b7afcdef2cf6a5e78cc46a551af76cd14255909b95d';
 
 const LP_DETAILS_FOR_WITHDRAWAL = {
@@ -346,7 +346,7 @@ async function executeForAccount({ aptos, account, mode, coinX, coinY, rounds, c
     if (mode !== 'faucet_testnet_coins' && mode !== 'combo_swap') {
         console.log(`\n===============================\nAkun: ${account.accountAddress.toString()}\nPasangan: ${coinX}/${coinY} | Putaran: ${rounds} | Mode: ${mode.toUpperCase()}\n===============================`);
     } else if (mode === 'combo_swap') {
-        console.log(`\n===============================\nAkun: ${account.accountAddress.toString()}\nMode: ${mode.toUpperCase()}\nUrutan: APT -> USDT -> USDC -> BTC -> APT\n===============================`);
+        console.log(`\n===============================\nAkun: ${account.accountAddress.toString()}\nMode: ${mode.toUpperCase()}\nUrutan: APT -> USDT -> USDC -> BTC -> USDC\n===============================`);
     } else {
         console.log(`\n===============================\nAkun: ${account.accountAddress.toString()}\nMode: ${mode.toUpperCase()}\n===============================`);
     }
@@ -368,7 +368,7 @@ async function executeForAccount({ aptos, account, mode, coinX, coinY, rounds, c
             } else if (mode === 'faucet_testnet_coins') {
                 await claimTestnetCoinsFaucet({ aptos, account });
             } else if (mode === 'combo_swap') {
-                const tokenSequence = ['APT', 'USDT', 'USDC', 'BTC'];
+                const tokenSequence = ['APT', 'USDT', 'USDC', 'BTC', 'USDC'];
                 await executeComboSwap({ aptos, account, tokenSequence, initialAmount: customSwapAmount });
             }
         } catch (err) {
@@ -402,18 +402,18 @@ function loadKeys() {
     const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET, fullnode: FULLNODE_URL }));
 
     console.log('');
-    console.log('███████╗  █████╗  ██████╗  ███╗   ██╗ ██╗ ██╗     ██╗ ███╗   ███╗');
-    console.log('██╔════╝ ██╔══██╗ ██╔══██╗ ████╗  ██║ ██║ ██║     ██║ ████╗ ████║');
-    console.log('█████╗   ███████║ ██████╔╝ ██╔██╗ ██║ ██║ ██║     ██║ ██╔████╔██║');
-    console.log('██╔══╝   ██╔══██║ ██╔══██╗ ██║╚██╗██║ ██║ ██║     ██║ ██║╚██╔╝██║');
-    console.log('███████╗ ██║  ██║ ██║  ██║ ██║ ╚████║ ██║ ╚██████╔╝   ██║ ╚═╝ ██║');
-    console.log('╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═════╝    ╚═╝     ╚═╝');
+    console.log('███████╗  █████╗  ██████╗  ███╗   ██╗ ██╗ ██╗    ██╗ ███╗   ███╗');
+    console.log('██╔════╝ ██╔══██╗ ██╔══██╗ ████╗  ██║ ██║ ██║    ██║ ████╗ ████║');
+    console.log('█████╗   ███████║ ██████╔╝ ██╔██╗ ██║ ██║ ██║    ██║ ██╔████╔██║');
+    console.log('██╔══╝   ██╔══██║ ██╔══██╗ ██║╚██╗██║ ██║ ██║    ██║ ██║╚██╔╝██║');
+    console.log('███████╗ ██║  ██║ ██║  ██║ ██║ ╚████║ ██║ ╚██████╔╝  ██║ ╚═╝ ██║');
+    console.log('╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═════╝   ╚═╝     ╚═╝');
     console.log('');
     console.log('by : WansNode || Telegram : https://t.me/Wansnode');
     console.log('--------------------------------------------------');
 
 
-    const modeChoice = readline.question('\nPilih mode:\n  1) Swap\n  2) Add Liquidity\n  3) Withdraw Liquidity\n  4) Claim Faucet (Testnet Coins: BTC, USDT, USDC)\n  5) Combo Swap (APT -> USDT -> USDC -> BTC)\n> ');
+    const modeChoice = readline.question('\nPilih mode:\n  1) Swap\n  2) Add Liquidity\n  3) Withdraw Liquidity\n  4) Claim Faucet (Testnet Coins: BTC, USDT, USDC)\n  5) Combo Swap (APT -> USDT -> USDC -> BTC -> USDC)\n> ');
     const mode = modeChoice.trim() === '1' ? 'swap' :
                  modeChoice.trim() === '2' ? 'add' :
                  modeChoice.trim() === '3' ? 'withdraw' :
