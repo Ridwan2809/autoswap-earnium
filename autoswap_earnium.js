@@ -59,7 +59,7 @@ const SWAP_AMT = {
     [COINS.BTC.type]:    10n
 };
 
-const MIN_OUT = 1n;
+const MIN_OUT = 1n; 
 const REFERRER_ADDRESS = '0xb8cf167820fec685007b9b7afcdef2cf6a5e78cc46a551af76cd14255909b95d';
 
 const LP_DETAILS_FOR_WITHDRAWAL = {
@@ -70,8 +70,8 @@ const LP_DETAILS_FOR_WITHDRAWAL = {
     },
     'APT/USDT': {
         poolId: '0x8bfa8776c0315ba1be0c0eea904af6fbf03069a7fc1573e7c68141f923df5d95',
-        unstakeLpAmount: 529394n, 
-        removeLpAmount: 32425n,    
+        unstakeLpAmount: 529394n,
+        removeLpAmount: 32425n,
     },
     'USDT/USDC': {
         poolId: '0x11a75e6020064c475cb787936adf1c756d51df1f55872bfb5f9d691ecfb52a76',
@@ -173,6 +173,7 @@ async function withdrawLiquidity({ aptos, account, coinX, coinY, round }) {
     console.log(`  Mencoba menarik likuiditas untuk ${coinX}/${coinY} (Putaran ke-${round})...`);
 
     const senderAddress = account.accountAddress.toString();
+    let unstakePayload;
     let removePayload;
 
     const pairKey = `${coinX}/${coinY}`;
@@ -185,28 +186,20 @@ async function withdrawLiquidity({ aptos, account, coinX, coinY, round }) {
 
     const { poolId, unstakeLpAmount, removeLpAmount } = lpDetails;
 
-    try {
-        console.log('  -> Melakukan unstake...');
-        const unstakePayload = {
-            function: `${ROUTER_ADDRESS}::${LIQUIDITY_STAKE_POOL_MODULE}::${FN_UNSTAKE}`,
-            typeArguments: [],
-            functionArguments: [
-                poolId,
-                unstakeLpAmount.toString(),
-            ],
-        };
-        await submitTx(aptos, account, unstakePayload);
-    } catch (err) {
-        if (err.message && err.message.includes('ERR_NO_STAKE')) {
-            console.warn('  ⚠️ Peringatan: Tidak ada stake yang ditemukan untuk akun ini. Melanjutkan ke langkah melepas likuiditas.');
-        } else {
-            console.error('  ⚠️ Error saat unstake:', err.message || err);
-            throw err;
-        }
-    }
+    unstakePayload = {
+        function: `${ROUTER_ADDRESS}::${LIQUIDITY_STAKE_POOL_MODULE}::${FN_UNSTAKE}`,
+        typeArguments: [],
+        functionArguments: [
+            poolId,
+            unstakeLpAmount.toString(),
+        ],
+    };
 
-    const minAmountX = 0n;
-    const minAmountY = 0n;
+    console.log('  -> Melakukan unstake...');
+    await submitTx(aptos, account, unstakePayload);
+
+    const minAmountX = 0n; 
+    const minAmountY = 0n; 
 
     removePayload = {
         function: `${ROUTER_ADDRESS}::${ROUTER_MODULE}::${FN_REMOVE_LIQ_ENTRY}`,
@@ -214,7 +207,7 @@ async function withdrawLiquidity({ aptos, account, coinX, coinY, round }) {
         functionArguments: [
             COINS[coinX].address,
             COINS[coinY].address,
-            false, 
+            false,
             removeLpAmount.toString(),
             minAmountX.toString(),
             minAmountY.toString(),
@@ -264,6 +257,71 @@ async function executeSwap({ aptos, account, coinX, coinY, swapAmount }) {
     await submitTx(aptos, account, payload);
 }
 
+async function executeComboSwap({ aptos, account, tokenSequence, initialAmount }) {
+    console.log(`  Memulai Combo Swap untuk akun: ${account.accountAddress.toString()}`);
+
+    let currentAmount = initialAmount;
+    let currentCoin = tokenSequence[0];
+
+    for (let i = 0; i < tokenSequence.length; i++) {
+        const fromCoinSymbol = tokenSequence[i];
+        const toCoinSymbol = tokenSequence[(i + 1) % tokenSequence.length]; 
+
+        if (i === tokenSequence.length - 1 && toCoinSymbol === tokenSequence[0]) {
+            console.log(`  Siklus combo swap selesai. Current token: ${fromCoinSymbol}`);
+            break;
+        }
+
+        console.log(`  Melakukan swap: ${fromCoinSymbol} (${formatUnits(currentAmount, COINS[fromCoinSymbol].decimals)}) -> ${toCoinSymbol}...`);
+
+        const senderAddress = account.accountAddress.toString();
+        let payload;
+
+        if (fromCoinSymbol === 'APT' || fromCoinSymbol === 'BTC') {
+            payload = {
+                function: `${ROUTER_ADDRESS}::${ROUTER_MODULE}::${FN_SWAP_APT_IN}`,
+                typeArguments: [COINS[fromCoinSymbol].type],
+                functionArguments: [
+                    currentAmount.toString(),
+                    MIN_OUT.toString(),
+                    [COINS[toCoinSymbol].address],
+                    [false],
+                    senderAddress,
+                    REFERRER_ADDRESS,
+                ],
+            };
+        } else {
+            payload = {
+                function: `${ROUTER_ADDRESS}::${ROUTER_MODULE}::${FN_SWAP_TOKEN_IN}`,
+                typeArguments: [],
+                functionArguments: [
+                    currentAmount.toString(),
+                    MIN_OUT.toString(),
+                    COINS[fromCoinSymbol].address,
+                    [COINS[toCoinSymbol].address],
+                    [false],
+                    senderAddress,
+                    REFERRER_ADDRESS,
+                ],
+            };
+        }
+
+        try {
+            await submitTx(aptos, account, payload);
+            console.log(`  ✓ Swap ${fromCoinSymbol} -> ${toCoinSymbol} berhasil.`);
+            currentAmount = SWAP_AMT[COINS[toCoinSymbol].type]; 
+            currentCoin = toCoinSymbol;
+        } catch (err) {
+            console.error(`  ⚠️ Gagal swap ${fromCoinSymbol} -> ${toCoinSymbol}:`, err.message || err);
+            currentAmount = SWAP_AMT[COINS[toCoinSymbol].type]; 
+            currentCoin = toCoinSymbol;
+        }
+        await sleep(3000); 
+    }
+    console.log(`  ✓ Combo Swap selesai untuk akun: ${account.accountAddress.toString()}`);
+}
+
+
 async function claimTestnetCoinsFaucet({ aptos, account }) {
     console.log(`  Mencoba klaim BTC, USDT, USDC dari faucet Earnium untuk akun: ${account.accountAddress.toString()}...`);
     const payload = {
@@ -285,8 +343,10 @@ async function claimTestnetCoinsFaucet({ aptos, account }) {
 }
 
 async function executeForAccount({ aptos, account, mode, coinX, coinY, rounds, customSwapAmount, customLiqAmountX, customLiqAmountY }) {
-    if (mode !== 'faucet_testnet_coins') {
+    if (mode !== 'faucet_testnet_coins' && mode !== 'combo_swap') {
         console.log(`\n===============================\nAkun: ${account.accountAddress.toString()}\nPasangan: ${coinX}/${coinY} | Putaran: ${rounds} | Mode: ${mode.toUpperCase()}\n===============================`);
+    } else if (mode === 'combo_swap') {
+        console.log(`\n===============================\nAkun: ${account.accountAddress.toString()}\nMode: ${mode.toUpperCase()}\nUrutan: APT -> USDT -> USDC -> BTC -> APT\n===============================`);
     } else {
         console.log(`\n===============================\nAkun: ${account.accountAddress.toString()}\nMode: ${mode.toUpperCase()}\n===============================`);
     }
@@ -307,6 +367,9 @@ async function executeForAccount({ aptos, account, mode, coinX, coinY, rounds, c
                 await executeSwap({ aptos, account, coinX, coinY, swapAmount });
             } else if (mode === 'faucet_testnet_coins') {
                 await claimTestnetCoinsFaucet({ aptos, account });
+            } else if (mode === 'combo_swap') {
+                const tokenSequence = ['APT', 'USDT', 'USDC', 'BTC'];
+                await executeComboSwap({ aptos, account, tokenSequence, initialAmount: customSwapAmount });
             }
         } catch (err) {
             console.error('⚠️ Terjadi masalah pada akun ini:', err.message || err);
@@ -339,25 +402,26 @@ function loadKeys() {
     const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET, fullnode: FULLNODE_URL }));
 
     console.log('');
-    console.log('███████╗  █████╗  ██████╗  ███╗    ██╗ ██╗ ██╗    ██╗ ███╗    ███╗');
-    console.log('██╔════╝ ██╔══██╗ ██╔══██╗ ████╗  ██║ ██║ ██║    ██║ ████╗ ████║');
-    console.log('█████╗   ███████║ ██████╔╝ ██╔██╗ ██║ ██║ ██║    ██║ ██╔████╔██║');
-    console.log('██╔══╝   ██╔══██║ ██╔══██╗ ██║╚██╗██║ ██║ ██║    ██║ ██║╚██╔╝██║');
-    console.log('███████╗ ██║  ██║ ██║  ██║ ██║ ╚████║ ██║ ╚██████╔╝ ██║ ╚═╝ ██║');
-    console.log('╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═════╝  ╚═╝     ╚═╝');
+    console.log('███████╗  █████╗  ██████╗  ███╗   ██╗ ██╗ ██╗     ██╗ ███╗   ███╗');
+    console.log('██╔════╝ ██╔══██╗ ██╔══██╗ ████╗  ██║ ██║ ██║     ██║ ████╗ ████║');
+    console.log('█████╗   ███████║ ██████╔╝ ██╔██╗ ██║ ██║ ██║     ██║ ██╔████╔██║');
+    console.log('██╔══╝   ██╔══██║ ██╔══██╗ ██║╚██╗██║ ██║ ██║     ██║ ██║╚██╔╝██║');
+    console.log('███████╗ ██║  ██║ ██║  ██║ ██║ ╚████║ ██║ ╚██████╔╝   ██║ ╚═╝ ██║');
+    console.log('╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═════╝    ╚═╝     ╚═╝');
     console.log('');
     console.log('by : WansNode || Telegram : https://t.me/Wansnode');
     console.log('--------------------------------------------------');
 
 
-    const modeChoice = readline.question('\nPilih mode:\n  1) Swap\n  2) Add Liquidity\n  3) Withdraw Liquidity\n  4) Claim Faucet (Testnet Coins: BTC, USDT, USDC)\n> ');
+    const modeChoice = readline.question('\nPilih mode:\n  1) Swap\n  2) Add Liquidity\n  3) Withdraw Liquidity\n  4) Claim Faucet (Testnet Coins: BTC, USDT, USDC)\n  5) Combo Swap (APT -> USDT -> USDC -> BTC)\n> ');
     const mode = modeChoice.trim() === '1' ? 'swap' :
                  modeChoice.trim() === '2' ? 'add' :
                  modeChoice.trim() === '3' ? 'withdraw' :
-                 modeChoice.trim() === '4' ? 'faucet_testnet_coins' : 'invalid';
+                 modeChoice.trim() === '4' ? 'faucet_testnet_coins' :
+                 modeChoice.trim() === '5' ? 'combo_swap' : 'invalid';
 
     if (mode === 'invalid') {
-        console.error('Pilihan mode tidak valid. Harap masukkan 1, 2, 3, atau 4.');
+        console.error('Pilihan mode tidak valid. Harap masukkan 1, 2, 3, 4, atau 5.');
         process.exit(1);
     }
 
@@ -368,7 +432,7 @@ function loadKeys() {
     let customLiqAmountX = null;
     let customLiqAmountY = null;
 
-    if (mode !== 'faucet_testnet_coins') {
+    if (mode !== 'faucet_testnet_coins' && mode !== 'combo_swap') {
         console.log('\nPilih pair:');
         PAIRS.forEach((p, i) => console.log(`  ${i + 1}) ${p[0]}/${p[1]}`));
         pairIdx = parseInt(readline.question('> '), 10) - 1;
@@ -388,11 +452,11 @@ function loadKeys() {
             console.error(`⚠️ Input jumlah swap tidak valid: ${e.message}. Menggunakan jumlah default.`);
             customSwapAmount = SWAP_AMT[COINS[coinX].type];
         }
-    } 
-    else if (mode === 'add') {
+    }    else if (mode === 'add') {
         const amountXStr = readline.question(`Masukkan jumlah ${coinX} yang ingin ditambahkan (contoh: 0.1): `);
         try {
             customLiqAmountX = parseUnits(amountXStr, COINS[coinX].decimals);
+            
             customLiqAmountY = parseUnits(amountXStr, COINS[coinY].decimals);
 
             console.log(`Jumlah ${coinY} yang akan ditambahkan secara otomatis (1:1 desimal): ${formatUnits(customLiqAmountY, COINS[coinY].decimals)}`);
@@ -402,10 +466,19 @@ function loadKeys() {
             process.exit(1);
         }
     }
+    else if (mode === 'combo_swap') {
+        const initialAmountStr = readline.question(`Masukkan jumlah awal APT untuk combo swap (contoh: 0.001): `);
+        try {
+            customSwapAmount = parseUnits(initialAmountStr, COINS.APT.decimals);
+        } catch (e) {
+            console.error(`⚠️ Input jumlah awal combo swap tidak valid: ${e.message}. Menggunakan jumlah default (0.001 APT).`);
+            customSwapAmount = parseUnits("0.001", COINS.APT.decimals);
+        }
+    }
 
     const rounds = parseInt(readline.question(`Berapa kali ${mode.replace('_', ' ')} per akun? (default 1): `), 10) || 1;
 
-    console.log(`\n▶️  Memulai ${mode.toUpperCase()} ${mode.startsWith('faucet') ? '' : `${coinX}/${coinY}`} sebanyak ${rounds} putaran untuk ${keys.length} akun…`);
+    console.log(`\n▶️  Memulai ${mode.toUpperCase()} ${mode.startsWith('faucet') ? '' : (mode === 'combo_swap' ? 'combo swap' : `${coinX}/${coinY}`)} sebanyak ${rounds} putaran untuk ${keys.length} akun…`);
 
     for (const [idx, pk] of keys.entries()) {
         const account = Account.fromPrivateKey({ privateKey: new Ed25519PrivateKey(hexToBytes(pk)) });
