@@ -10,7 +10,7 @@ const {
     AccountAddress,
 } = require('@aptos-labs/ts-sdk');
 
-const FULLNODE_URL = process.env.FULLNODE_URL || 'https://rpc.ankr.com/premium-http/aptos_testnet/821d636b0da4a1d1480be42486a1286038c17d09e9cbe581b11d885b83a5154c/v1';
+const FULLNODE_URL = process.env.FULLNODE_URL || 'https://fullnode.testnet.aptoslabs.com/v1';
 const ROUTER_ADDRESS = '0xd5ee59267fe627f12ab4cac246e7d683e65b5d4745660feecf63f1bb0a842a65';
 const ROUTER_MODULE = 'router';
 const LIQUIDITY_STAKE_POOL_MODULE = 'liquidity_stake_pool';
